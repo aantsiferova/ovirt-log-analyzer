@@ -4,20 +4,7 @@ from datetime import datetime
 import os
 
 
-def print_all_headers(directory, errors, headers, log_format_headers, out):
-    for err in errors:
-        format_name = err[1].split(':')[0]
-        for h in headers:
-            if h in log_format_headers[format_name]:
-                out.write("%s %s\n" %
-                          (h,
-                           err[log_format_headers[
-                               format_name].index(h)]))
-            else:
-                out.write("%s %s\n" % (h, ''))
-        out.write("\n")
-
-
+# formatting output
 def print_only_dt_message(directory, errors, new_fields, out):
     if errors == []:
         return
@@ -47,3 +34,18 @@ def print_only_dt_message(directory, errors, new_fields, out):
                    "%d-%m-%Y"),
                    linenum_len, os.path.join(directory, err[line_idx]),
                    full_reason_len, reason[idx], err[msg_idx]))
+
+
+# print all message fields (should be modified)
+# def print_all_headers(directory, errors, headers, log_format_headers, out):
+#     for err in errors:
+#         format_name = err[1].split(':')[0]
+#         for h in headers:
+#             if h in log_format_headers[format_name]:
+#                 out.write("%s %s\n" %
+#                           (h,
+#                            err[log_format_headers[
+#                                format_name].index(h)]))
+#             else:
+#                 out.write("%s %s\n" % (h, ''))
+#         out.write("\n")

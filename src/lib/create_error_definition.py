@@ -155,6 +155,7 @@ def check_constraints(line, events, host_ids, vm_numbers, additive, dt,
     return condition
 
 
+# check if user-specified VM was on user-specified host
 def check_vm_on_host(dt, line, host_ids, vm_numbers, additive, vm_timeline):
     for vm_name in vm_timeline.keys():
         if vm_name not in line:
@@ -168,6 +169,7 @@ def check_vm_on_host(dt, line, host_ids, vm_numbers, additive, vm_timeline):
     return False
 
 
+# parse line and return fields
 def create_line_info(in_traceback_flag, in_traceback_line, multiline_flag,
                      multiline_line, fields_names, out_descr, time_zone,
                      additive, subtasks, events, host_ids, vm_numbers,
@@ -277,6 +279,7 @@ def create_line_info(in_traceback_flag, in_traceback_line, multiline_flag,
         return prev_line, line_info, in_traceback_flag, multiline_flag
 
 
+# main loop over logfile lines
 def loop_over_lines(directory, logname, format_template, time_zone, positions,
                     out_descr, queue_bar, additive, events, host_ids,
                     time_ranges, vm_numbers, vm_timeline, subtasks, task_lines,

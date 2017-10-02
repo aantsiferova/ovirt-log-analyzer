@@ -257,6 +257,7 @@ if __name__ == "__main__":
     logs.read_time_ranges(args.reload)
     output_descriptor.write('Searching for running VMs and hosts...\n')
     logs.find_vms_and_hosts(args.reload)
+    # print info if 0l option was specified
     if args.list_vm_host:
         output_descriptor.write('------- List of files\' time ranges (UTC) ' +
                                 '-------\n')
@@ -326,12 +327,18 @@ if __name__ == "__main__":
             output_descriptor.write('\n')
         exit()
     output_descriptor.write('Searching for VM tasks...\n')
+    # searching for tasks ans subtasks
     logs.find_vm_tasks(args.reload)
+    # searching for first poritions (in bytes) that corresponds to the given
+    # time ranges
     logs.find_real_line_num()
     output_descriptor.write('Loading data...\n')
+    # loading data
     logs.load_data(args.warn, args.progressbar)
     output_descriptor.write('Analyzing the messages...\n')
+    # merging data from all logfiles by time
     logs.merge_all_messages()
+    # analyzing the data and returning all important messages
     messages, new_fields = logs.find_important_events()
     output_descriptor.write('Printing messages...\n')
     # Output file
@@ -339,4 +346,5 @@ if __name__ == "__main__":
         output_file = open(os.path.join(output_directory, args.out), 'w')
     else:
         output_file = sys.stdout
+    # print messages to the output
     logs.print_errors(messages, new_fields, output_file)

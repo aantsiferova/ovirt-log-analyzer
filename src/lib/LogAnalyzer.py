@@ -18,17 +18,41 @@ from progressbar import ProgressBar
 from lib.util import open_log_file
 
 
+# LogAnalyzer object includes all information about given log files
 class LogAnalyzer:
-    # out_descr
-    # directory
-    # filenames[]
-    # time_zones[]
-    # formats_templates[]
-    # ----
-    # found_logs['log1',...]
-    # log_file_format{"log1":...,}
-    # all_errors{"log1":...,}
-    # format_fields{'log1':...}
+    # Description for the folloving self.: ...
+    # out_descr - where to print errors and warnings
+    # directory - where logfiles are located
+    # output_dir - where to save output files
+    # time_ranges - user-defined time ranges to be analyzed
+    # user_vms - user-defined VM IDs and names
+    # user_events - user-defined events (any text)
+    # user_hosts - user-defined host IDs and names
+    # additive_link - search for user-defined VM&host or VM|host (additive)
+    # criterias - reasons for adding message to the result output
+    # formats_templates[] - regexp for gifferent log formats
+    # found_logs['log1',...] - filenames for found and recognized lodfiles
+    # time_zones[] - time zones for log files
+    # positions - in-bytes positions in logfiles for tie ranges
+    # total_time_ranges - first and last date+time for log files
+    # all_vms - all found VMs
+    # all_hosts - all found hosts
+    # not_running_vms - all found VM names without found ID
+    # not_found_vmnames - all found VM IDs without found name
+    # not_found_hostnames - all found host IDs without found names
+    # vm_timeline - dict with time of VM starting and migrating info
+    # needed_lines - numbers of lines to be added to the result output
+    # reasons - dict of reasons (from self.criterias) for self.needed_lines
+    # vm_tasks - all found VM tasks
+    # long_tasks - long self.vm_tasks (> 5s)
+    # subtasks - all VM subtasks
+    # stuctured_commands - VM tasks and subtasks with child/parent order
+    # real_line_num - line numbers for self.positions
+    # all_errors{"log1":...,} - all found relevant messages
+    # format_fields{'log1':...} - messages' fields (date+time,thread,sender...)
+    # timeline - number of errors and warnings each second
+    # merged_errors - merged self.all_errors
+    # all_fields - all fields of messages (date+time, thread, sender, type,...)
     def __init__(self, out_descr, directory, filenames, tz, criterias,
                  time_ranges, user_vms, user_events, user_hosts,
                  templates_filename, additive_link, output_dir):
@@ -98,6 +122,7 @@ class LogAnalyzer:
             out_descr.write('No logfiles found.\n')
             exit()
 
+    # find first and last date+time in log files
     def read_time_ranges(self, re_load):
         if (not re_load and os.path.isdir(
                 os.path.join(self.directory, 'log_analyzer_cache'))
@@ -139,6 +164,7 @@ class LogAnalyzer:
             pickle.dump([self.positions, self.total_time_ranges,
                          self.time_ranges, self.found_logs], f)
 
+    # find VMs and hosts in engine, vdsm, libvirt logs
     def find_vms_and_hosts(self, re_load):
         if (not re_load and os.path.isdir(
                 os.path.join(self.directory, 'log_analyzer_cache'))
@@ -218,6 +244,7 @@ class LogAnalyzer:
                          self.positions, self.user_vms, self.user_hosts,
                          self.vm_timeline], f)
 
+    # find VM tasks in engine and libvirt logs
     def find_vm_tasks(self, re_load):
         if (not re_load and os.path.isdir(
                 os.path.join(self.directory, 'log_analyzer_cache'))
@@ -286,6 +313,7 @@ class LogAnalyzer:
                          self.long_tasks, self.subtasks,
                          self.stuctured_commands], f)
 
+    # find line numbers for time range positions in log files
     def find_real_line_num(self):
         self.real_line_num = {}
         if self.time_ranges == {}:
@@ -421,10 +449,12 @@ class LogAnalyzer:
         print_only_dt_message(self.directory, errors_list, new_fields, out)
 
 
+# unpack run_args
 def star(input):
     return process_files(*input)
 
 
+# run over log file lines in parallel
 def process_files(idx, log, formats_templates, directory, time_zones,
                   positions, out_descr, q_bar, additive, user_events,
                   user_hosts, time_ranges, user_vms, vm_timeline, tasks,

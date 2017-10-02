@@ -45,6 +45,7 @@ def parse_date_time(line, time_zone):
     return date_time
 
 
+# fing first and last date_time in log files
 def find_time_range(output_descriptor, log_directory, files, tz_info,
                     time_range_info):
     logs_datetimes = {}
@@ -110,6 +111,7 @@ def find_time_range(output_descriptor, log_directory, files, tz_info,
     return logs_datetimes, relevant_logs
 
 
+# find bytes-positions in log files for time ranges
 def find_needed_linenum(output_descriptor, log_directory, files, tz_info,
                         time_range_info):
     needed_linenum = {}
@@ -230,8 +232,8 @@ def find_needed_linenum(output_descriptor, log_directory, files, tz_info,
     return needed_linenum
 
 
-def libvirtd_vm_host(f, filename, pos, tz_info, vms, hosts,
-                     time_range_info):
+# find VMs and hosts in libvirt-logfiles
+def libvirtd_vm_host(f, filename, pos, tz_info, vms, hosts, time_range_info):
     cur = {}
     f.seek(0, os.SEEK_END)
     file_len = f.tell()
@@ -313,6 +315,7 @@ def libvirtd_vm_host(f, filename, pos, tz_info, vms, hosts,
     return vms, hosts, real_firstpos, real_lastpos
 
 
+# find VMs and hosts in vdsm-logfiles
 def vdsm_vm_host(f, filename, pos, tz_info, vms, hosts, time_range_info):
     cur = {}
     f.seek(0, os.SEEK_END)
@@ -382,6 +385,7 @@ def vdsm_vm_host(f, filename, pos, tz_info, vms, hosts, time_range_info):
     return vms, hosts, real_firstpos, real_lastpos
 
 
+# find VMs and hosts in engine-logfiles
 def engine_vm_host(f, filename, pos, tz_info, vms, hosts, time_range_info):
     f.seek(0, os.SEEK_END)
     file_len = f.tell()
@@ -491,6 +495,7 @@ def engine_vm_host(f, filename, pos, tz_info, vms, hosts, time_range_info):
     return vms, unknown_vmnames, hosts, real_firstpos, real_lastpos
 
 
+# find VM starting/migrating info in engine logs
 def timeline_for_engine_vm(output_directory, log_directory, f, filename,
                            output_descriptor, tz_info, vms, hosts):
     all_vms = {}
@@ -605,6 +610,7 @@ def timeline_for_engine_vm(output_directory, log_directory, f, filename,
     return all_vms
 
 
+# reorganize VM timeline from timeline_for_engine_vm
 def create_time_ranges_for_vms(vms):
     vm_time_range = {}
     for vm_name in vms.keys():
@@ -644,6 +650,7 @@ def create_time_ranges_for_vms(vms):
     return vm_time_range
 
 
+# fing all VMs and hosts in all logs
 def find_all_vm_host(positions,
                      output_descriptor,
                      output_directory,
@@ -745,6 +752,7 @@ def find_all_vm_host(positions,
         not_found_hostnames, first_lines, vms_timeline
 
 
+# find all VM tasks and subtasks in engine-logfiles
 def find_vm_tasks_engine(positions, output_descriptor, log_directory,
                          log, file_formats, tz_info, time_range_info,
                          output_directory, needed_linenum, reasons,
@@ -1033,8 +1041,8 @@ def find_vm_tasks_engine(positions, output_descriptor, log_directory,
         needed_linenum, reasons
 
 
-def link_commands(log_dir, output_descriptor, commands,
-                  output_directory):
+# link VM tasks with parent tasks and subtasks
+def link_commands(log_dir, output_descriptor, commands, output_directory):
     without_parents = []
     new_commands = {}
     for command_id in sorted(commands.keys()):
@@ -1133,6 +1141,8 @@ def link_commands(log_dir, output_descriptor, commands,
     return new_commands, command_lvl
 
 
+# change subtask levels numbering (was: 1 - the most "inner",
+# change to the most "parent")
 def change_lvl_numbering(commands):
     command_lvl = {}
     cur_lvl = 1
@@ -1143,6 +1153,7 @@ def change_lvl_numbering(commands):
     return commands, command_lvl
 
 
+# change subtask levels numbering
 def change_lvl_numbering_recursive(com, cur_lvl, lvls):
     com['lvl'] = cur_lvl
     lvls[com['id']] = cur_lvl
@@ -1162,6 +1173,7 @@ def change_lvl_numbering_recursive(com, cur_lvl, lvls):
     return com, lvls
 
 
+# returns parent task ID
 def find_parent(output_descriptor, commands, command_id):
     parent = None
     for com in sorted(commands.keys()):
@@ -1172,6 +1184,7 @@ def find_parent(output_descriptor, commands, command_id):
     return parent
 
 
+# find VM tasks in libvirt-logfiles
 def find_vm_tasks_libvirtd(positions, output_descriptor, log_directory,
                            log, file_formats, tz_info, time_range_info,
                            output_directory, needed_linenum, reasons,
@@ -1335,6 +1348,82 @@ def find_vm_tasks_libvirtd(positions, output_descriptor, log_directory,
     return commands_threads, long_actions, needed_linenum, reasons
 
 
+# return long tasks (>5s) for all found all_threads tasks
+def find_long_operations(all_threads, needed_linenum, reasons):
+    full_operations_time = {}
+    operations_time = {}
+    long_operations = {}
+    for thread in all_threads:
+        for command in all_threads[thread]:
+            if ('duration' in command.keys()):
+                if command['command_start_name'] not in operations_time.keys():
+                    operations_time[command['command_start_name']] = []
+                operations_time[command['command_start_name']] += [command]
+            elif ('duration_full' in command.keys()):
+                if command['command_name'] not in full_operations_time.keys():
+                    full_operations_time[command['command_name']] = []
+                full_operations_time[command['command_name']] += [command]
+
+    for command in sorted(operations_time.keys()):
+        com_time = [c_id['duration'] for c_id in operations_time[command]]
+        med_com_time = np.median(com_time)
+        std_com_time = np.std(com_time)
+        for c_id in operations_time[command]:
+            if ((c_id['duration'] > med_com_time + 3*std_com_time
+                    and c_id['duration'] > 1) or c_id['duration'] > 5):
+                if command not in long_operations.keys():
+                    long_operations[command] = []
+                long_operations[command] += [c_id['start_time']]
+                needed_linenum.add(c_id['log'] + ':' +
+                                   str(c_id['start_line_num']))
+                needed_linenum.add(c_id['log'] + ':' +
+                                   str(c_id['finish_line_num']))
+                if (c_id['log'] + ':' + str(c_id['start_line_num'])
+                        not in reasons.keys()):
+                    reasons[c_id['log'] + ':' +
+                            str(c_id['start_line_num'])] = set()
+                reasons[c_id['log'] + ':' + str(c_id['start_line_num'])].add(
+                    'Task(duration=' + str(np.round(c_id['duration'], 2)) +
+                    ')')
+                if (c_id['log'] + ':' + str(c_id['finish_line_num'])
+                        not in reasons.keys()):
+                    reasons[c_id['log'] + ':' +
+                            str(c_id['finish_line_num'])] = set()
+                reasons[c_id['log'] + ':' + str(c_id['finish_line_num'])].add(
+                    'Task(duration=' + str(np.round(c_id['duration'], 2)) +
+                    ')')
+    for command in sorted(full_operations_time.keys()):
+        com_time = [c_id['duration_full']
+                    for c_id in full_operations_time[command]]
+        med_com_time = np.median(com_time)
+        std_com_time = np.std(com_time)
+        for c_id in full_operations_time[command]:
+            if ((c_id['duration_full'] > med_com_time + 3*std_com_time
+                    and c_id['duration_full'] > 1)
+                    or c_id['duration_full'] > 5):
+                if command not in long_operations.keys():
+                    long_operations[command] = []
+                long_operations[command] += [c_id['init_time']]
+                needed_linenum.add(c_id['log'] + ':' +
+                                   str(c_id['init_line_num']))
+                needed_linenum.add(c_id['log'] + ':' +
+                                   str(c_id['end_line_num']))
+                if (c_id['log'] + ':' + str(c_id['init_line_num'])
+                        not in reasons.keys()):
+                    reasons[c_id['log'] + ':' +
+                            str(c_id['init_line_num'])] = set()
+                reasons[c_id['log'] + ':' + str(c_id['init_line_num'])].add(
+                    'Task(duration=' + str(np.round(c_id[
+                        'duration_full'], 2)) + ')')
+                if (c_id['log'] + ':' + str(c_id['end_line_num'])
+                        not in reasons.keys()):
+                    reasons[c_id['log'] + ':' +
+                            str(c_id['end_line_num'])] = set()
+                reasons[c_id['log'] + ':' + str(c_id['end_line_num'])].add(
+                            'Task(duration=' + str(np.round(c_id[
+                                'duration_full'], 2)) + ')')
+    return long_operations, needed_linenum, reasons
+
 # def find_vm_tasks_vdsm(positions, output_descriptor, log_directory,
 #                        log, file_formats, tz_info, time_range_info,
 #                        output_directory, needed_linenum, reasons,
@@ -1431,79 +1520,3 @@ def find_vm_tasks_libvirtd(positions, output_descriptor, log_directory,
 #                                                             needed_linenum,
 #                                                             reasons)
 #     return commands_threads, long_actions, needed_linenum, reasons
-
-
-def find_long_operations(all_threads, needed_linenum, reasons):
-    full_operations_time = {}
-    operations_time = {}
-    long_operations = {}
-    for thread in all_threads:
-        for command in all_threads[thread]:
-            if ('duration' in command.keys()):
-                if command['command_start_name'] not in operations_time.keys():
-                    operations_time[command['command_start_name']] = []
-                operations_time[command['command_start_name']] += [command]
-            elif ('duration_full' in command.keys()):
-                if command['command_name'] not in full_operations_time.keys():
-                    full_operations_time[command['command_name']] = []
-                full_operations_time[command['command_name']] += [command]
-
-    for command in sorted(operations_time.keys()):
-        com_time = [c_id['duration'] for c_id in operations_time[command]]
-        med_com_time = np.median(com_time)
-        std_com_time = np.std(com_time)
-        for c_id in operations_time[command]:
-            if ((c_id['duration'] > med_com_time + 3*std_com_time
-                    and c_id['duration'] > 1) or c_id['duration'] > 5):
-                if command not in long_operations.keys():
-                    long_operations[command] = []
-                long_operations[command] += [c_id['start_time']]
-                needed_linenum.add(c_id['log'] + ':' +
-                                   str(c_id['start_line_num']))
-                needed_linenum.add(c_id['log'] + ':' +
-                                   str(c_id['finish_line_num']))
-                if (c_id['log'] + ':' + str(c_id['start_line_num'])
-                        not in reasons.keys()):
-                    reasons[c_id['log'] + ':' +
-                            str(c_id['start_line_num'])] = set()
-                reasons[c_id['log'] + ':' + str(c_id['start_line_num'])].add(
-                    'Task(duration=' + str(np.round(c_id['duration'], 2)) +
-                    ')')
-                if (c_id['log'] + ':' + str(c_id['finish_line_num'])
-                        not in reasons.keys()):
-                    reasons[c_id['log'] + ':' +
-                            str(c_id['finish_line_num'])] = set()
-                reasons[c_id['log'] + ':' + str(c_id['finish_line_num'])].add(
-                    'Task(duration=' + str(np.round(c_id['duration'], 2)) +
-                    ')')
-    for command in sorted(full_operations_time.keys()):
-        com_time = [c_id['duration_full']
-                    for c_id in full_operations_time[command]]
-        med_com_time = np.median(com_time)
-        std_com_time = np.std(com_time)
-        for c_id in full_operations_time[command]:
-            if ((c_id['duration_full'] > med_com_time + 3*std_com_time
-                    and c_id['duration_full'] > 1)
-                    or c_id['duration_full'] > 5):
-                if command not in long_operations.keys():
-                    long_operations[command] = []
-                long_operations[command] += [c_id['init_time']]
-                needed_linenum.add(c_id['log'] + ':' +
-                                   str(c_id['init_line_num']))
-                needed_linenum.add(c_id['log'] + ':' +
-                                   str(c_id['end_line_num']))
-                if (c_id['log'] + ':' + str(c_id['init_line_num'])
-                        not in reasons.keys()):
-                    reasons[c_id['log'] + ':' +
-                            str(c_id['init_line_num'])] = set()
-                reasons[c_id['log'] + ':' + str(c_id['init_line_num'])].add(
-                    'Task(duration=' + str(np.round(c_id[
-                        'duration_full'], 2)) + ')')
-                if (c_id['log'] + ':' + str(c_id['end_line_num'])
-                        not in reasons.keys()):
-                    reasons[c_id['log'] + ':' +
-                            str(c_id['end_line_num'])] = set()
-                reasons[c_id['log'] + ':' + str(c_id['end_line_num'])].add(
-                            'Task(duration=' + str(np.round(c_id[
-                                'duration_full'], 2)) + ')')
-    return long_operations, needed_linenum, reasons

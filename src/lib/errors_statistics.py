@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 
 
+# merge messages from all log files into one dict
 def merge_all_errors_by_time(all_errors, fields_names):
     all_messages = []
     set_headers = set([h for s in list(fields_names.values())
@@ -38,6 +39,11 @@ def merge_all_errors_by_time(all_errors, fields_names):
     return timeline, all_messages, list_headers
 
 
+# 1. create clusters of messages based om first two words of filtered message
+# filtered - without any text within brackets or quotes
+# 2. analyze clusters according to the given criterias
+# needed_msgs - messages to be added to the result output,
+# reasons, detail_reasons - reasons of adding each of needed_msgs (criteria)
 def clusterize_messages(out_descr, all_errors, fields, user_events,
                         all_vms, all_hosts, subtasks, dirname,
                         err_timeline, vm_tasks,
@@ -60,6 +66,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                                        for i in all_vms[k]['id']]
     hosts_list = list(all_hosts.keys()) + [i for k in all_hosts.keys()
                                            for i in all_hosts[k]['id']]
+    # form clusters (events), mstext is a cluster key (first 80 symbols)
     for err_id in range(len(all_errors)):
         if err_id % 100 == 0:
             out_descr.write(('clusterize_messages: Preprocessing %s ' +
@@ -81,6 +88,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
         events[mstext]['line_num'] += [all_errors[err_id][strid]]
         events[mstext]['data'] += [all_errors[err_id]]
         all_errors[err_id] += [mstext]
+        # check if message include user-defined event
         for event in user_events:
             if event in all_errors[err_id][msid]:
                 needed_msgs.add(all_errors[err_id][strid])
@@ -88,6 +96,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                     detail_reasons[all_errors[err_id][strid]] = set()
                 detail_reasons[all_errors[err_id][strid]].add('Event=' +
                                                               event)
+        # check if message include user-defined VM
         for vm_name in vms_list:
             if (vm_name in all_errors[err_id][msid]):
                 if vm_name not in all_vms.keys():
@@ -103,6 +112,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                                                               vm_add[0])
                 if 'Differ by VM ID' in criterias:
                     events[mstext]['keywords'].add(vm_name)
+        # check if message include user-defined Host
         for host_name in hosts_list:
             if (host_name in all_errors[err_id][msid]):
                 if host_name not in all_hosts.keys():
@@ -116,6 +126,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                     detail_reasons[all_errors[err_id][strid]] = set()
                 detail_reasons[all_errors[err_id][strid]].add('Host=' +
                                                               host_add[0])
+        # check if message include any subtask (task ID)
         if 'Subtasks' in criterias:
             for t in subtasks.keys():
                 if t in all_errors[err_id][msid]:
@@ -126,6 +137,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                     reasons[all_errors[err_id][strid]].add('Task/' +
                                                            str(subtasks[t]))
                     # break
+        # check if message include key word for error of warning
         if 'Error or warning' in criterias:
             for k in ['error', 'fail', 'failure', 'failed', 'traceback',
                       'warn', 'warning', 'could not', 'exception', 'down',
@@ -142,6 +154,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                             reasons[all_errors[err_id][strid]] = set()
                         reasons[all_errors[err_id][strid]].add(
                             'Error or warning')
+    # reorganize clusters: bring messages to clusters of first two words
     new_events = {}
     for shorten in sorted(events.keys()):
         word_key = shorten.split(' ')[0]
@@ -156,6 +169,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
         new_events[word_key]['keywords'].union(events[shorten]['keywords'])
     events = new_events
     del new_events
+    # save clusters
     f = open(os.path.join(output_directory,
              dirname.split('/')[-2]+"_clusters.txt"), 'w')
     for c_id, clust in enumerate(sorted(events.keys())):
@@ -164,6 +178,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
         f.write('\n')
     f.close()
     out_descr.write('\n')
+    # analyze clusters size
     mean_len = np.mean([len(events[g]['line_num']) for g in events.keys()])
     std_len = np.std([len(events[g]['line_num']) for g in events.keys()])
     for fid, filtered in enumerate(events.keys()):
@@ -196,6 +211,7 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                         reasons[line_num] = set()
                     reasons[line_num].add('Rare')
     out_descr.write('\n')
+    # analyze the timeline: add mesagges that was followed by many errors
     if 'Increased errors' in criterias:
         for t in range(10, len(err_timeline)-10):
             if len(err_timeline[t-10:t]) < len(err_timeline[t:t+10]):
@@ -206,13 +222,16 @@ def clusterize_messages(out_descr, all_errors, fields, user_events,
                         reasons[msg[strid]] = set()
                     reasons[msg[strid]].add('Increased errors')
     msg_showed = []
+    # only these fields will be showed
     new_fields = ['date_time', 'line_num', 'reason', 'details', 'message']
     if reasons == {}:
         return msg_showed, new_fields
+    # save messages that were excluded from the result output
     f = open(os.path.join(output_directory,
              dirname.split('/')[-2]+'_frequent.txt'), 'w')
     separator = ';'
     max_len = max([len(separator.join(reasons[r])) for r in reasons.keys()])
+    # form the result output from needed_msgs line numbers
     for msg in all_errors:
         if msg[strid] in needed_msgs:
             if msg[strid] in reasons.keys():
